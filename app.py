@@ -1,12 +1,26 @@
-from flask import Flask
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = Flask(__name__)
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-@app.route('/')
+
+@app.get("/")
 def hello_world():  # put application's code here
     return 'Hello World!'
 
+@app.get("/predic")
+async def predict(query: str):
+    return {"query": query}
 
-if __name__ == '__main__':
-    app.run()
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app="app:app", host="localhost", port=8000, reload=True)
