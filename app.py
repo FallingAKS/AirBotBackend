@@ -17,9 +17,9 @@ app.add_middleware(
 def hello_world():  # put application's code here
     return 'Hello World!'
 
-@app.get("/predic")
-async def predict(query: str):
-    return {"query": query}
+@app.get("/answer")
+async def answer(question: str):
+    return {"answer": question}
 
 if __name__ == "__main__":
     import uvicorn
