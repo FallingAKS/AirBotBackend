@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from interact import interact
 
 app = FastAPI()
 
@@ -12,15 +13,14 @@ app.add_middleware(
 )
 
 
-
 @app.get("/")
 def hello_world():  # put application's code here
     return 'Hello World!'
 
-@app.get("/answer")
-async def answer(question: str):
-    return {"answer": question}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app="app:app", host="localhost", port=8000, reload=True)
+@app.get("/answer")
+async def answer(question: str, temperature: float = 1,  max_history_len: int = 10, max_len: int = 100,
+                 repetition_penalty: float = 1):
+    return {
+        "answer": interact(question, "./outputs/min_ppl_model/", max_history_len, max_len, repetition_penalty, temperature)
+    }

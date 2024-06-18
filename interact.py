@@ -118,7 +118,6 @@ def set_args():
     Sets up the arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', default='0', type=str, help='设备')
     parser.add_argument('--temperature', default=1, type=float, help='生成的temperature')
     parser.add_argument('--topk', default=8, type=int, help='最高k选1')
     parser.add_argument('--topp', default=0, type=float, help='最高积累概率')
@@ -131,23 +130,15 @@ def set_args():
     return parser.parse_args()
 
 
-def interact():
-    args = set_args()
-    inference = Inference(args.model_dir, device, args.max_history_len, args.max_len, args.repetition_penalty,
-                          args.temperature)
-    print('开始和空乘AI对话，输入q以退出')
+def interact(input:str, model_dir, max_history_len, max_len, repetition_penalty, temperature)->str:
+    inference = Inference(model_dir, device, max_history_len, max_len, repetition_penalty,
+                          temperature)
 
     while True:
         try:
-            query = input("乘客:")
-            if query.strip() == 'q':
-                raise ValueError("exit")
+            query = "乘客:"+input
             # query = "你好"
             text = inference.predict(query)
-            print("空乘AI:" + text)
+            return text
         except ValueError:
             break
-
-
-if __name__ == '__main__':
-    interact()
