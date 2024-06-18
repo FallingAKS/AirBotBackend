@@ -59,7 +59,7 @@ class Inference:
         input_ids = torch.tensor(input_ids).long().to(self.device)
         input_ids = input_ids.unsqueeze(0)
         response = []  # 根据context，生成的response
-        for _ in range(self.max_len): # 最多生成max_len个token
+        for _ in range(self.max_len):  # 最多生成max_len个token
             outputs = self.model(input_ids=input_ids)
             logits = outputs.logits
             next_token_logits = logits[0, -1, :]
@@ -79,6 +79,9 @@ class Inference:
         self.history.append(response)
         response_tokens = self.tokenizer.convert_ids_to_tokens(response)
         return "".join(response_tokens)
+
+    def restart(self):
+        self.history = []
 
 
 def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
@@ -113,6 +116,7 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
         logits[indices_to_remove] = filter_value
     return logits
 
+
 def set_args():
     """
     Sets up the arguments.
@@ -123,20 +127,28 @@ def set_args():
     parser.add_argument('--topp', default=0, type=float, help='最高积累概率')
     parser.add_argument('--log_path', default='interact.log', type=str, help='interact日志存放位置')
     parser.add_argument('--model_dir', default='./outputs/min_ppl_model/', type=str, help='对话模型文件夹路径')
-    parser.add_argument('--repetition_penalty', default=1.0, type=float, help="重复惩罚参数，若生成的对话重复性较高，可适当提高该参数")
+    parser.add_argument('--repetition_penalty', default=1.0, type=float,
+                        help="重复惩罚参数，若生成的对话重复性较高，可适当提高该参数")
     parser.add_argument('--max_len', type=int, default=100, help='每个utterance的最大长度,超过指定长度则进行截断')
     parser.add_argument('--max_history_len', type=int, default=10, help="dialogue history的最大长度")
     parser.add_argument('--no_cuda', action='store_true', help='不使用GPU进行预测')
     return parser.parse_args()
 
 
-def interact(input:str, model_dir, max_history_len, max_len, repetition_penalty, temperature)->str:
+def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty, temperature) -> str:
     inference = Inference(model_dir, device, max_history_len, max_len, repetition_penalty,
                           temperature)
 
+    if input is None or input == "":
+        return "请输入问题！"
+    elif input == "raks":
+        # 重启对话
+        inference.restart()
+        return "aks: restart successfully!"
+
     while True:
         try:
-            query = "乘客:"+input
+            query = "乘客:" + input
             # query = "你好"
             text = inference.predict(query)
             return text
