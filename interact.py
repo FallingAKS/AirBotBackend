@@ -7,6 +7,7 @@ Modified on: https://github.com/yangjianxin1/GPT2-chitchat
 """
 import argparse
 import os
+import time
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import torch
@@ -135,7 +136,11 @@ def set_args():
     return parser.parse_args()
 
 
-def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty, temperature) -> str:
+history = []
+
+
+def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty, temperature):
+    global history
     inference = Inference(model_dir, device, max_history_len, max_len, repetition_penalty,
                           temperature)
 
@@ -144,13 +149,47 @@ def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty
     elif input == "raks":
         # 重启对话
         inference.restart()
+        history = []
         return "aks: restart successfully!"
 
     while True:
         try:
             query = "乘客:" + input
-            # query = "你好"
+            input_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             text = inference.predict(query)
-            return text
+
+            history.append({
+                'choices': [
+                    {
+                        'message': {
+                            'content': input,
+                            'role': 'user'
+                        }
+                    }
+                ],
+                'createdTime': input_time
+            })
+            text_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            response = {
+                'choices': [
+                    {
+                        'message': {
+                            'content': text,
+                            'role': 'assistant'
+                        }
+                    }
+                ],
+                'createdTime': text_time
+            }
+            history.append(response)
+
+            return response
         except ValueError:
             break
+
+
+def get_history():
+    global history
+    if history is None or len(history) == 0:
+        return []
+    return history
