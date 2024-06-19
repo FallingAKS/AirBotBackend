@@ -19,6 +19,18 @@ pad_id = 0
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+from sparkai.llm.llm import ChatSparkLLM, ChunkPrintHandler
+from sparkai.core.messages import ChatMessage
+
+# 星火认知大模型Spark3.5 Max的URL值，其他版本大模型URL值请前往文档（https://www.xfyun.cn/doc/spark/Web.html）查看
+SPARKAI_URL = 'wss://spark-api.xf-yun.com/v3.5/chat'
+# 星火认知大模型调用秘钥信息，请前往讯飞开放平台控制台（https://console.xfyun.cn/services/bm35）查看
+SPARKAI_APP_ID = '8bd4e1c5'
+SPARKAI_API_SECRET = 'ZDc4NDA0ODhjY2FhMmUyNWE0YTg1ZGNj'
+SPARKAI_API_KEY = '582e5780be2b0948ba1af98d2c3b9f21'
+# 星火认知大模型Spark3.5 Max的domain值，其他版本大模型domain值请前往文档（https://www.xfyun.cn/doc/spark/Web.html）查看
+SPARKAI_DOMAIN = 'generalv3.5'
+
 
 class Inference:
     def __init__(
@@ -137,10 +149,12 @@ def set_args():
 
 
 history = []
+title = ""
 
 
 def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty, temperature):
     global history
+    global title
     inference = Inference(model_dir, device, max_history_len, max_len, repetition_penalty,
                           temperature)
 
@@ -150,6 +164,7 @@ def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty
         # 重启对话
         inference.restart()
         history = []
+        title = ""
         return "aks: restart successfully!"
 
     while True:
@@ -157,6 +172,27 @@ def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty
             query = "乘客:" + input
             input_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             text = inference.predict(query)
+
+            if title is None or title == "":
+                spark = ChatSparkLLM(
+                    spark_api_url=SPARKAI_URL,
+                    spark_app_id=SPARKAI_APP_ID,
+                    spark_api_key=SPARKAI_API_KEY,
+                    spark_api_secret=SPARKAI_API_SECRET,
+                    spark_llm_domain=SPARKAI_DOMAIN,
+                    streaming=False,
+                )
+                messages = [ChatMessage(
+                    role="user",
+                    content='根据user【' + input + '】的提问和assistant【' + text + '】的回答为对话起一个标题，返回答案时只需返回对话标题即可。',
+                )]
+                handler = ChunkPrintHandler()
+                input_string = str(spark.generate([messages], callbacks=[handler]))
+
+                # 使用 split 方法提取 text 内容
+                start = input_string.find("text='") + len("text='")
+                end = input_string.find("'", start)
+                title = input_string[start:end]
 
             history.append({
                 'choices': [
@@ -193,3 +229,10 @@ def get_history():
     if history is None or len(history) == 0:
         return []
     return history
+
+
+def get_title():
+    global title
+    if title is None or title == "":
+        return "No title"
+    return title
