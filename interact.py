@@ -7,6 +7,7 @@ Modified on: https://github.com/yangjianxin1/GPT2-chitchat
 """
 import argparse
 import os
+import time
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import torch
@@ -17,6 +18,18 @@ PAD = '[PAD]'
 pad_id = 0
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+from sparkai.llm.llm import ChatSparkLLM, ChunkPrintHandler
+from sparkai.core.messages import ChatMessage
+
+# 星火认知大模型Spark3.5 Max的URL值，其他版本大模型URL值请前往文档（https://www.xfyun.cn/doc/spark/Web.html）查看
+SPARKAI_URL = 'wss://spark-api.xf-yun.com/v3.5/chat'
+# 星火认知大模型调用秘钥信息，请前往讯飞开放平台控制台（https://console.xfyun.cn/services/bm35）查看
+SPARKAI_APP_ID = '8bd4e1c5'
+SPARKAI_API_SECRET = 'ZDc4NDA0ODhjY2FhMmUyNWE0YTg1ZGNj'
+SPARKAI_API_KEY = '582e5780be2b0948ba1af98d2c3b9f21'
+# 星火认知大模型Spark3.5 Max的domain值，其他版本大模型domain值请前往文档（https://www.xfyun.cn/doc/spark/Web.html）查看
+SPARKAI_DOMAIN = 'generalv3.5'
 
 
 class Inference:
@@ -59,7 +72,7 @@ class Inference:
         input_ids = torch.tensor(input_ids).long().to(self.device)
         input_ids = input_ids.unsqueeze(0)
         response = []  # 根据context，生成的response
-        for _ in range(self.max_len): # 最多生成max_len个token
+        for _ in range(self.max_len):  # 最多生成max_len个token
             outputs = self.model(input_ids=input_ids)
             logits = outputs.logits
             next_token_logits = logits[0, -1, :]
@@ -79,6 +92,9 @@ class Inference:
         self.history.append(response)
         response_tokens = self.tokenizer.convert_ids_to_tokens(response)
         return "".join(response_tokens)
+
+    def restart(self):
+        self.history = []
 
 
 def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
@@ -113,6 +129,7 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
         logits[indices_to_remove] = filter_value
     return logits
 
+
 def set_args():
     """
     Sets up the arguments.
@@ -123,22 +140,99 @@ def set_args():
     parser.add_argument('--topp', default=0, type=float, help='最高积累概率')
     parser.add_argument('--log_path', default='interact.log', type=str, help='interact日志存放位置')
     parser.add_argument('--model_dir', default='./outputs/min_ppl_model/', type=str, help='对话模型文件夹路径')
-    parser.add_argument('--repetition_penalty', default=1.0, type=float, help="重复惩罚参数，若生成的对话重复性较高，可适当提高该参数")
+    parser.add_argument('--repetition_penalty', default=1.0, type=float,
+                        help="重复惩罚参数，若生成的对话重复性较高，可适当提高该参数")
     parser.add_argument('--max_len', type=int, default=100, help='每个utterance的最大长度,超过指定长度则进行截断')
     parser.add_argument('--max_history_len', type=int, default=10, help="dialogue history的最大长度")
     parser.add_argument('--no_cuda', action='store_true', help='不使用GPU进行预测')
     return parser.parse_args()
 
 
-def interact(input:str, model_dir, max_history_len, max_len, repetition_penalty, temperature)->str:
+history = []
+title = ""
+
+
+def interact(input: str, model_dir, max_history_len, max_len, repetition_penalty, temperature):
+    global history
+    global title
     inference = Inference(model_dir, device, max_history_len, max_len, repetition_penalty,
                           temperature)
 
+    if input is None or input == "":
+        return "请输入问题！"
+    elif input == "raks":
+        # 重启对话
+        inference.restart()
+        history = []
+        title = ""
+        return "aks: restart successfully!"
+
     while True:
         try:
-            query = "乘客:"+input
-            # query = "你好"
+            query = "乘客:" + input
+            input_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             text = inference.predict(query)
-            return text
+
+            if title is None or title == "":
+                spark = ChatSparkLLM(
+                    spark_api_url=SPARKAI_URL,
+                    spark_app_id=SPARKAI_APP_ID,
+                    spark_api_key=SPARKAI_API_KEY,
+                    spark_api_secret=SPARKAI_API_SECRET,
+                    spark_llm_domain=SPARKAI_DOMAIN,
+                    streaming=False,
+                )
+                messages = [ChatMessage(
+                    role="user",
+                    content='根据user【' + input + '】的提问和assistant【' + text + '】的回答为对话起一个标题，返回答案时只需返回对话标题即可。',
+                )]
+                handler = ChunkPrintHandler()
+                input_string = str(spark.generate([messages], callbacks=[handler]))
+
+                # 使用 split 方法提取 text 内容
+                start = input_string.find("text='") + len("text='")
+                end = input_string.find("'", start)
+                title = input_string[start:end]
+
+            history.append({
+                'choices': [
+                    {
+                        'message': {
+                            'content': input,
+                            'role': 'user'
+                        }
+                    }
+                ],
+                'createdTime': input_time
+            })
+            text_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            response = {
+                'choices': [
+                    {
+                        'message': {
+                            'content': text,
+                            'role': 'assistant'
+                        }
+                    }
+                ],
+                'createdTime': text_time
+            }
+            history.append(response)
+
+            return response
         except ValueError:
             break
+
+
+def get_history():
+    global history
+    if history is None or len(history) == 0:
+        return []
+    return history
+
+
+def get_title():
+    global title
+    if title is None or title == "":
+        return "No title"
+    return title

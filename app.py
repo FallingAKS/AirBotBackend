@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from interact import interact
+from interact import interact, get_history, get_title
 
 app = FastAPI()
 
@@ -21,6 +21,12 @@ def hello_world():  # put application's code here
 @app.get("/answer")
 async def answer(question: str, temperature: float = 1,  max_history_len: int = 10, max_len: int = 100,
                  repetition_penalty: float = 1):
-    return {
-        "answer": interact(question, "./outputs/min_ppl_model/", max_history_len, max_len, repetition_penalty, temperature)
-    }
+    return interact(question, "./outputs/min_ppl_model/", max_history_len, max_len, repetition_penalty, temperature)
+
+@app.get("/history")
+async def history():
+    return get_history()
+
+@app.get("/title")
+async def title():
+    return get_title()
